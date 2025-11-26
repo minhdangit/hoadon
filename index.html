@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tạo Hoá Đơn Minh Đăng IT</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="https://dichvu.leminhdang.com/img/favicon.png">
+    
+    <!-- Thư viện Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Thư viện Icon -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Thư viện Chụp ảnh (html2canvas) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <!-- ========================================= -->
+    <!-- PHẦN 1: CSS -->
+    <!-- ========================================= -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap');
+
+        body { font-family: 'Roboto', sans-serif; }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Khổ giấy A4 */
+        .a4-page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 10mm;
+            background: white;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            background-color: #ffffff; 
+        }
+
+        /* Trang trí tam giác nền */
+        .decor-top-right {
+            position: absolute; top: 0; right: 0; width: 0; height: 0;
+            border-left: 100px solid transparent;
+            border-top: 100px solid #facc15;
+            z-index: 0;
+        }
+        .decor-bottom-left {
+            position: absolute; bottom: 0; left: 0; width: 0; height: 0;
+            border-right: 150px solid transparent;
+            border-bottom: 150px solid #1e4e63;
+            z-index: 0;
+        }
+        .decor-bottom-left-small {
+            position: absolute; bottom: 0; left: 80px; width: 0; height: 0;
+            border-right: 80px solid transparent;
+            border-bottom: 80px solid rgba(250, 204, 21, 0.8);
+            z-index: 0;
+        }
+
+        /* Watermark */
+        .watermark {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60%; opacity: 0.08;
+            pointer-events: none; z-index: 0;
+            filter: grayscale(100%);
+        }
+
+        .bg-pink-vietqr { background-color: #fff0f5; }
+        .bg-white-box { background-color: white; }
+
+        /* Cấu hình IN ẤN */
+        @media print {
+            @page { margin: 0; size: A4; }
+            body * { visibility: hidden; }
+            .no-print { display: none !important; }
+            #invoice-preview, #invoice-preview * { visibility: visible; }
+            #invoice-preview {
+                position: absolute; left: 0; top: 0;
+                width: 100%; height: 100%; margin: 0; padding: 10mm;
+                box-shadow: none; border: none;
+                background-color: white !important;
+                -webkit-print-color-adjust: exact; print-color-adjust: exact;
+                display: flex; flex-direction: column;
+            }
+            .decor-top-right, .decor-bottom-left, .decor-bottom-left-small, .watermark, .bg-pink-vietqr, .bg-white-box {
+                -webkit-print-color-adjust: exact; print-color-adjust: exact;
+            }
+            a[href]:after { content: none !important; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 min-h-screen flex flex-col md:flex-row overflow-hidden">
+
+    <!-- ========================================= -->
+    <!-- PHẦN 2: GIAO DIỆN NHẬP LIỆU (TRÁI) -->
+    <!-- ========================================= -->
+    <div class="w-full md:w-1/3 bg-white border-r border-gray-200 flex flex-col h-screen no-print z-10 shadow-lg">
+        <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-20">
+            <h2 class="text-2xl font-bold text-[#1e4e63]">Cấu hình Hoá Đơn</h2>
+            <div class="flex gap-2">
+                <button onclick="resetData()" title="Tạo mới (Reset)" class="p-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition">
+                    <i data-lucide="refresh-cw"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-6 space-y-6">
+            <!-- Thông tin chung -->
+            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <h3 class="font-bold text-gray-700 mb-3 border-b pb-2 text-sm uppercase">Thông tin chung</h3>
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 uppercase block mb-1">Ngày xuất</label>
+                        <input type="date" id="inp-dateInput" class="w-full p-2 border rounded focus:ring-2 focus:ring-[#1e4e63] outline-none text-sm" onchange="handleDateChange(this.value)">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 uppercase block mb-1">Số HĐ</label>
+                        <!-- Tách thành 2 input: Prefix (Tự động) và Suffix (Chỉnh sửa) -->
+                        <div class="flex rounded border overflow-hidden focus-within:ring-2 focus-within:ring-[#1e4e63]">
+                            <input type="text" id="inp-invoicePrefix" class="w-2/3 p-2 bg-gray-100 text-gray-500 outline-none text-sm font-mono text-right border-r" readonly>
+                            <input type="text" id="inp-invoiceSuffix" class="w-1/3 p-2 bg-white text-gray-800 outline-none text-sm font-bold font-mono text-center" oninput="updateSuffix(this.value)">
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-gray-500 uppercase block mb-1">Người lập HĐ</label>
+                    <input type="text" id="inp-creator" class="w-full p-2 border rounded focus:ring-2 focus:ring-[#1e4e63] outline-none text-sm" oninput="updateField('creator', this.value)">
+                </div>
+            </div>
+
+            <!-- Khách hàng -->
+            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <h3 class="font-bold text-gray-700 mb-3 border-b pb-2 text-sm uppercase">Khách hàng</h3>
+                <div class="mb-3">
+                    <label class="text-xs font-bold text-gray-500 uppercase block mb-1">Tên khách hàng</label>
+                    <input type="text" id="inp-customerName" placeholder="Nhập tên khách..." class="w-full p-2 border rounded focus:ring-2 focus:ring-[#1e4e63] outline-none text-sm" oninput="updateField('customerName', this.value)">
+                </div>
+                <div class="mb-3">
+                    <label class="text-xs font-bold text-gray-500 uppercase block mb-1">Số điện thoại</label>
+                    <input type="text" id="inp-customerPhone" placeholder="Nhập SĐT..." class="w-full p-2 border rounded focus:ring-2 focus:ring-[#1e4e63] outline-none text-sm" oninput="updateField('customerPhone', this.value)">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-gray-500 uppercase block mb-1">Địa chỉ</label>
+                    <textarea id="inp-customerAddress" rows="2" placeholder="Nhập địa chỉ..." class="w-full p-2 border rounded focus:ring-2 focus:ring-[#1e4e63] outline-none text-sm" oninput="updateField('customerAddress', this.value)"></textarea>
+                </div>
+            </div>
+
+            <!-- Sản phẩm -->
+            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <div class="flex justify-between items-center mb-3 border-b pb-2">
+                    <h3 class="font-bold text-gray-700 text-sm uppercase">Sản phẩm</h3>
+                    <button onclick="addItem()" class="text-xs flex items-center bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition">
+                        <i data-lucide="plus" width="14" height="14" class="mr-1"></i> Thêm
+                    </button>
+                </div>
+                <div id="items-input-container" class="space-y-3"></div>
+            </div>
+
+            <!-- Ghi chú -->
+            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <h3 class="font-bold text-gray-700 mb-3 border-b pb-2 text-sm uppercase">Ghi chú</h3>
+                <textarea id="inp-note" rows="4" placeholder="Nhập ghi chú..." class="w-full p-2 border rounded focus:ring-2 focus:ring-[#1e4e63] outline-none text-sm" oninput="updateField('note', this.value)"></textarea>
+            </div>
+
+            <!-- CỤM NÚT CHỨC NĂNG -->
+            <div class="grid grid-cols-2 gap-3 sticky bottom-0 bg-white pt-2 pb-4 border-t border-gray-100">
+                <!-- Nút Lưu Ảnh -->
+                <button onclick="handleSaveImage()" class="w-full py-3 bg-orange-600 text-white font-bold text-sm rounded-lg shadow hover:bg-orange-700 transition-all flex justify-center items-center gap-2">
+                    <i data-lucide="image-down"></i> LƯU ẢNH (PNG)
+                </button>
+                
+                <!-- Nút In & Lưu Sheet -->
+                <button onclick="handlePrintAndSave()" class="w-full py-3 bg-[#1e4e63] text-white font-bold text-sm rounded-lg shadow hover:bg-[#163a4a] transition-all flex justify-center items-center gap-2">
+                    <i data-lucide="printer"></i> IN & LƯU (SHEET)
+                </button>
+            </div>
+            <p id="save-status" class="text-center text-xs text-gray-500 mt-1 h-4"></p>
+        </div>
+    </div>
+
+    <!-- ========================================= -->
+    <!-- PHẦN 3: XEM TRƯỚC HOÁ ĐƠN (PHẢI) -->
+    <!-- ========================================= -->
+    <div class="w-full md:w-2/3 bg-gray-500 flex justify-center overflow-y-auto h-screen p-8 md:p-8 no-print-bg">
+        <div id="invoice-preview" class="a4-page relative">
+            
+            <!-- Decor Background -->
+            <div class="decor-top-right"></div>
+            <div class="decor-bottom-left"></div>
+            <div class="decor-bottom-left-small"></div>
+            <div class="watermark">
+                <img src="https://lh3.googleusercontent.com/d/1A-s4apIO-oaCILK4QglmCK_YrE4Ne81H" alt="Watermark">
+            </div>
+
+            <!-- Nội dung chính -->
+            <div class="relative z-10 flex-1 flex flex-col">
+                
+                <!-- Header -->
+                <div class="flex justify-between items-start mb-6">
+                    <div class="w-1/2 text-sm text-gray-800 space-y-1">
+                        <p><span class="font-bold">Người lập HĐ:</span> <span id="out-creator"></span></p>
+                        <p><span class="font-bold">HĐ Số:</span> #<span id="out-invoiceNo"></span></p>
+                        <p><span class="font-bold">HĐ xuất ngày:</span> <span id="out-date"></span></p>
+                        <h1 class="text-5xl font-extrabold text-[#1e4e63] mt-3 uppercase tracking-wide">Hoá Đơn</h1>
+                        <div class="mt-4 space-y-1">
+                            <p><span class="font-bold">Khách hàng:</span> <span id="out-customerName"></span></p>
+                            <p><span class="font-bold">Địa chỉ:</span> <span id="out-customerAddress"></span></p>
+                        </div>
+                    </div>
+                    <div class="w-1/2 flex flex-col items-end">
+                        <div class="mb-4 text-center">
+                            <img src="https://lh3.googleusercontent.com/d/1A-s4apIO-oaCILK4QglmCK_YrE4Ne81H" alt="Logo" class="h-24 object-contain">
+                        </div>
+                        <p class="text-sm font-bold mt-2">Điện thoại: <span id="out-customerPhone"></span></p>
+                    </div>
+                </div>
+
+                <!-- Table -->
+                <div class="mt-2">
+                    <table class="w-full border-collapse">
+                        <thead>
+                            <tr class="bg-[#1e4e63] text-white text-sm uppercase">
+                                <th class="py-2 px-2 w-[10%] text-center border-r border-white/20">STT</th>
+                                <th class="py-2 px-4 w-[45%] text-left border-r border-white/20">Sản phẩm</th>
+                                <th class="py-2 px-2 w-[10%] text-center border-r border-white/20">SL</th>
+                                <th class="py-2 px-4 w-[15%] text-right border-r border-white/20">Đơn giá</th>
+                                <th class="py-2 px-4 w-[20%] text-right">Tổng</th>
+                            </tr>
+                        </thead>
+                        <tbody id="invoice-items-body"></tbody>
+                        <tfoot>
+                            <tr class="bg-gray-100 border-t-2 border-[#1e4e63]">
+                                <td colspan="4" class="py-3 px-4 text-right font-bold text-[#1e4e63] uppercase">Tổng cộng</td>
+                                <td class="py-3 px-4 text-right font-bold text-xl text-[#1e4e63]" id="out-total">0</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <!-- GHI CHÚ (Nằm ngay dưới bảng) -->
+                <div class="text-xs text-gray-600 leading-relaxed italic border-t pt-2 mb-2 min-h-[20px]" id="out-note"></div>
+
+                <!-- PHẦN FOOTER -->
+                <div class="mt-auto pt-4 flex items-stretch justify-between mb-8 relative z-20 gap-4">
+                    
+                    <!-- Cột 1 (Trái): Thông tin chuyển khoản (Compact) -->
+                    <div class="z-20 w-auto">
+                        <div class="bg-white-box shadow-sm border border-gray-200 rounded-xl p-3 min-w-[200px]">
+                            <h3 class="font-bold text-[10px] text-gray-500 uppercase mb-1 tracking-wide">Thông tin chuyển khoản:</h3>
+                            <p class="font-bold text-blue-900 text-sm leading-tight" id="out-bankName"></p>
+                            <!-- Số tài khoản -->
+                            <p class="font-extrabold text-2xl text-[#1e4e63] tracking-wider my-0.5 leading-none" id="out-bankAccount"></p>
+                            <p class="font-bold text-[10px] text-gray-500 uppercase tracking-wide" id="out-bankOwner"></p>
+                        </div>
+                    </div>
+
+                    <!-- Cột 2 (Giữa): QR Code (Compact, đồng bộ chiều cao) -->
+                    <div class="z-20 w-auto flex justify-center">
+                        <div class="bg-pink-vietqr p-2 rounded-xl border border-pink-100 shadow-sm w-[120px] flex flex-col">
+                            <div class="flex justify-between items-center px-1 gap-1 mb-1">
+                                <span class="text-[8px] font-bold text-blue-900">VietinBank</span>
+                                <span class="text-[6px] font-bold text-orange-500 bg-white px-1 rounded border border-orange-200">247</span>
+                            </div>
+                            <div class="bg-white p-1 rounded-lg flex-1 flex items-center justify-center">
+                                <img id="out-qr" src="" alt="QR Code" class="w-full h-full object-contain">
+                            </div>
+                            <div class="text-center mt-1">
+                                 <p class="text-[7px] font-bold text-[#1e4e63] uppercase truncate" id="out-bankOwner-card"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cột 3 (Phải): Lời cảm ơn & Liên hệ (Căn trái, Icon chuôt) -->
+                    <div class="flex flex-col items-end justify-end flex-1 pl-4">
+                         <div class="w-full flex flex-col items-end">
+                             
+                             <!-- Hình vẽ chuột máy tính -->
+                             <div class="mb-1 opacity-50">
+                                <svg width="35" height="45" viewBox="0 0 60 80" fill="none" stroke="#1e4e63" stroke-width="2">
+                                    <path d="M15 10 C15 0, 45 0, 45 10 V30 C45 40, 15 40, 15 30 Z" />
+                                    <path d="M30 10 V20" />
+                                    <path d="M45 25 C60 25, 60 50, 40 60 C30 65, 50 75, 50 80" stroke-dasharray="3 3"/>
+                                </svg>
+                             </div>
+
+                             <h3 class="text-lg font-bold mb-2 text-gray-800 text-right">Cảm ơn bạn lựa chọn<br/>dịch vụ!</h3>
+                             
+                             <!-- Block Hotline & Địa chỉ: Căn trái -->
+                             <div class="text-xs font-bold text-[#1e4e63] text-left w-fit">
+                                 <p class="flex items-center gap-2 mb-1">
+                                     <i data-lucide="phone" width="14"></i> 
+                                     <span>Hotline | Zalo: 089.99.77.870</span>
+                                 </p>
+                                 <p class="flex items-start gap-2">
+                                     <i data-lucide="map-pin" width="14" class="mt-0.5 flex-shrink-0"></i> 
+                                     <span class="text-gray-600 font-normal">Hỗ trợ tận nơi: Càng Long, Vĩnh Long & lân cận</span>
+                                 </p>
+                             </div>
+                         </div>
+                    </div>
+                </div>
+                
+            </div>
+
+            <!-- Website Link -->
+            <div class="absolute bottom-2 right-10 z-30 text-right">
+                <span class="text-[9px] text-gray-400">https://dichvu.leminhdang.com</span>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ========================================= -->
+    <!-- PHẦN 4: JAVASCRIPT -->
+    <!-- ========================================= -->
+    <script>
+        // --- BƯỚC QUAN TRỌNG: THAY THẾ URL BÊN DƯỚI BẰNG URL CỦA BẠN ---
+        const GOOGLE_SHEET_API_URL = "https://script.google.com/macros/s/AKfycbyhv4X2aG22KwE6INRAtpIKSg2ExsdcOqIJB27J2EkgYoy0InF3goF2TtmCCDvlJFuS/exec"; 
+
+        const CONFIG = {
+            creator: "Minh Đăng",
+            bankName: "Vietinbank",
+            bankAccount: "109885112844",
+            bankOwner: "MINHDANGIT",
+            qrUrl: "https://dichvu.leminhdang.com/img/qr.jpg",
+            defaultNote: "" 
+        };
+
+        let currentData = {
+            invoicePrefix: "", invoiceSuffix: "", invoiceNo: "", 
+            date: "", rawDate: "", creator: CONFIG.creator,
+            customerName: "", customerAddress: "", customerPhone: "",
+            items: [{ stt: 1, name: "", qty: 1, price: 0 }], note: CONFIG.defaultNote, ...CONFIG
+        };
+
+        // --- LOGIC TẠO PREFIX HĐ ---
+        function getInvoicePrefix(dateString) {
+            if (!dateString) return "";
+            const d = new Date(dateString);
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = String(d.getFullYear()).slice(-2);
+            return `${day}${month}${year}`;
+        }
+
+        function getSuggestedSuffix(prefix) {
+            const storageKey = `invoice_seq_${prefix}`;
+            let seq = localStorage.getItem(storageKey);
+            if (!seq) seq = 1;
+            return String(seq).padStart(2, '0');
+        }
+
+        function incrementInvoiceSequence(prefix) {
+            if (!prefix) return;
+            const storageKey = `invoice_seq_${prefix}`;
+            let seq = parseInt(localStorage.getItem(storageKey)) || 1;
+            localStorage.setItem(storageKey, seq + 1);
+        }
+
+        // --- CHỨC NĂNG LƯU ẢNH (PNG) ---
+        function handleSaveImage() {
+            const element = document.getElementById('invoice-preview');
+            const btn = document.querySelector('button[onclick="handleSaveImage()"]');
+            const originalText = btn.innerHTML;
+            
+            btn.innerHTML = '<i data-lucide="loader"></i> Đang xử lý...';
+            btn.disabled = true;
+            lucide.createIcons();
+
+            html2canvas(element, {
+                scale: 2, 
+                useCORS: true, 
+                scrollY: -window.scrollY 
+            }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `HoaDon_${currentData.invoiceNo}.png`;
+                link.href = canvas.toDataURL("image/png");
+                link.click();
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                lucide.createIcons();
+            }).catch(err => {
+                console.error("Lỗi chụp ảnh:", err);
+                alert("Có lỗi khi tạo ảnh. Vui lòng thử lại.");
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                lucide.createIcons();
+            });
+        }
+
+        // --- XỬ LÝ DỮ LIỆU ---
+        function handleDateChange(val) {
+            currentData.rawDate = val;
+            if(val) {
+                const [y, m, d] = val.split('-');
+                currentData.date = `${d}/${m}/${y}`;
+                currentData.invoicePrefix = getInvoicePrefix(val);
+                // Khi đổi ngày, tự động lấy số thứ tự tiếp theo
+                currentData.invoiceSuffix = getSuggestedSuffix(currentData.invoicePrefix);
+            } else {
+                currentData.date = ""; 
+                currentData.invoicePrefix = "";
+                currentData.invoiceSuffix = "";
+            }
+            updateInvoiceNo(); // Cập nhật số HĐ đầy đủ
+            render();
+        }
+
+        function updateSuffix(val) {
+            currentData.invoiceSuffix = val;
+            updateInvoiceNo();
+            render(); // Chỉ render preview, không render lại input này để tránh mất focus
+        }
+
+        function updateInvoiceNo() {
+            currentData.invoiceNo = currentData.invoicePrefix + currentData.invoiceSuffix;
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('vi-VN').format(amount);
+        }
+
+        function render() {
+            // Update Inputs (trừ suffix đang nhập)
+            document.getElementById('inp-invoicePrefix').value = currentData.invoicePrefix;
+            if(document.activeElement.id !== 'inp-invoiceSuffix') {
+                document.getElementById('inp-invoiceSuffix').value = currentData.invoiceSuffix;
+            }
+
+            // Update Preview
+            document.getElementById('out-invoiceNo').textContent = currentData.invoiceNo;
+            document.getElementById('out-date').textContent = currentData.date;
+            document.getElementById('out-creator').textContent = currentData.creator;
+            document.getElementById('out-customerName').textContent = currentData.customerName;
+            document.getElementById('out-customerAddress').textContent = currentData.customerAddress;
+            document.getElementById('out-customerPhone').textContent = currentData.customerPhone;
+            
+            const tbody = document.getElementById('invoice-items-body');
+            tbody.innerHTML = '';
+            let total = 0;
+
+            currentData.items.forEach((item, index) => {
+                const lineTotal = item.qty * item.price;
+                total += lineTotal;
+                const tr = document.createElement('tr');
+                tr.className = index % 2 === 0 ? 'bg-[#1e4e63]/5 text-sm' : 'text-sm';
+                tr.innerHTML = `
+                    <td class="py-2 px-2 text-center border-r border-gray-200">${index + 1}</td>
+                    <td class="py-2 px-4 font-medium border-r border-gray-200">${item.name}</td>
+                    <td class="py-2 px-2 text-center border-r border-gray-200">${item.qty}</td>
+                    <td class="py-2 px-4 text-right border-r border-gray-200">${item.price > 0 ? formatCurrency(item.price) : ''}</td>
+                    <td class="py-2 px-4 text-right font-medium">${lineTotal > 0 ? formatCurrency(lineTotal) : ''}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            const emptyRows = Math.max(0, 10 - currentData.items.length);
+            for(let i=0; i<emptyRows; i++) {
+                const tr = document.createElement('tr');
+                tr.className = i % 2 === 0 ? 'bg-[#1e4e63]/5 text-sm h-[45px]' : 'text-sm h-[45px]';
+                tr.innerHTML = `<td class="border-r border-gray-200"></td><td class="border-r border-gray-200"></td><td class="border-r border-gray-200"></td><td class="border-r border-gray-200"></td><td></td>`;
+                tbody.appendChild(tr);
+            }
+
+            document.getElementById('out-total').textContent = formatCurrency(total);
+            
+            const noteContainer = document.getElementById('out-note');
+            if (currentData.note) {
+                 noteContainer.innerHTML = currentData.note.split('\n').map(line => `<p>• ${line}</p>`).join('');
+            } else { noteContainer.innerHTML = ''; }
+
+            document.getElementById('out-bankName').textContent = currentData.bankName;
+            document.getElementById('out-bankAccount').textContent = currentData.bankAccount;
+            document.getElementById('out-bankOwner-card').textContent = currentData.bankOwner;
+            document.getElementById('out-bankOwner').textContent = currentData.bankOwner;
+            document.getElementById('out-qr').src = currentData.qrUrl;
+
+            lucide.createIcons();
+        }
+
+        function renderInputList() {
+            const container = document.getElementById('items-input-container');
+            container.innerHTML = '';
+            currentData.items.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'flex gap-2 items-start bg-white p-2 rounded shadow-sm border border-gray-100';
+                div.innerHTML = `
+                    <div class="w-8 text-center pt-2 text-xs font-bold text-gray-400">${index + 1}</div>
+                    <div class="flex-1 space-y-2">
+                        <input type="text" value="${item.name}" oninput="updateItem(${index}, 'name', this.value)" placeholder="Tên sản phẩm" class="w-full p-1 border rounded text-sm font-medium focus:ring-1 focus:ring-blue-500 outline-none">
+                        <div class="flex gap-2">
+                            <div class="w-1/3"><input type="number" value="${item.qty}" oninput="updateItem(${index}, 'qty', this.value)" placeholder="SL" class="w-full p-1 border rounded text-sm text-center focus:ring-1 focus:ring-blue-500 outline-none"></div>
+                            <div class="w-2/3"><input type="number" value="${item.price}" oninput="updateItem(${index}, 'price', this.value)" placeholder="Đơn giá" class="w-full p-1 border rounded text-sm text-right focus:ring-1 focus:ring-blue-500 outline-none"></div>
+                        </div>
+                    </div>
+                    <button onclick="removeItem(${index})" class="text-red-400 hover:text-red-600 pt-2 transition"><i data-lucide="trash-2" width="16"></i></button>
+                `;
+                container.appendChild(div);
+            });
+            lucide.createIcons();
+        }
+
+        function updateField(key, value) { currentData[key] = value; render(); }
+        function updateItem(index, field, value) {
+            if (field === 'qty' || field === 'price') currentData.items[index][field] = Number(value);
+            else currentData.items[index][field] = value;
+            render();
+        }
+        function addItem() { currentData.items.push({ stt: currentData.items.length + 1, name: "", qty: 1, price: 0 }); renderInputList(); render(); }
+        function removeItem(index) { currentData.items.splice(index, 1); currentData.items = currentData.items.map((item, idx) => ({ ...item, stt: idx + 1 })); renderInputList(); render(); }
+
+        function resetData() {
+            if(confirm("Bạn muốn tạo hoá đơn mới?")) {
+                const today = currentData.rawDate;
+                const prefix = getInvoicePrefix(today);
+                const suffix = getSuggestedSuffix(prefix);
+                
+                currentData = { 
+                    ...CONFIG, 
+                    date: currentData.date, 
+                    rawDate: today, 
+                    invoicePrefix: prefix,
+                    invoiceSuffix: suffix,
+                    invoiceNo: prefix + suffix,
+                    creator: CONFIG.creator, 
+                    customerName: "", customerAddress: "", customerPhone: "", 
+                    items: [{ stt: 1, name: "", qty: 1, price: 0 }], 
+                    note: CONFIG.defaultNote 
+                };
+                document.getElementById('inp-customerName').value = "";
+                document.getElementById('inp-customerPhone').value = "";
+                document.getElementById('inp-customerAddress').value = "";
+                document.getElementById('inp-note').value = CONFIG.defaultNote;
+                renderInputList(); render();
+            }
+        }
+
+        async function handlePrintAndSave() {
+            const btn = document.querySelector('button[onclick="handlePrintAndSave()"]');
+            const status = document.getElementById('save-status');
+            
+            if(!currentData.rawDate) { alert("Vui lòng chọn ngày xuất!"); return; }
+            
+            // Tăng số thứ tự cho lần sau (chỉ khi in/lưu thành công)
+            incrementInvoiceSequence(currentData.invoicePrefix);
+
+            if (GOOGLE_SHEET_API_URL !== "YOUR_GOOGLE_SCRIPT_WEB_APP_URL") {
+                status.textContent = "Đang lưu dữ liệu...";
+                btn.disabled = true;
+                try {
+                    const payload = { ...currentData, items: JSON.stringify(currentData.items) };
+                    await fetch(GOOGLE_SHEET_API_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    status.textContent = "Đã lưu thành công!";
+                } catch (e) {
+                    console.error(e);
+                    status.textContent = "Lỗi khi lưu, vui lòng kiểm tra lại.";
+                } finally {
+                    btn.disabled = false;
+                }
+            } else {
+                console.log("Chưa cấu hình URL Google Sheet.");
+            }
+
+            setTimeout(() => {
+                window.print();
+                // Reset hoặc cập nhật số HĐ mới
+                const nextSuffix = getSuggestedSuffix(currentData.invoicePrefix);
+                currentData.invoiceSuffix = nextSuffix;
+                updateInvoiceNo();
+                render();
+            }, 500);
+        }
+
+        // Init
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('inp-dateInput').value = today;
+        handleDateChange(today);
+        document.getElementById('inp-creator').value = CONFIG.creator;
+        document.getElementById('inp-note').value = CONFIG.defaultNote;
+        renderInputList();
+        render();
+        lucide.createIcons();
+    </script>
+</body>
+</html>
